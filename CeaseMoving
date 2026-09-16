@@ -226,14 +226,17 @@ entity:SetCallback("OnDespawning", function()
 		raycastLoop = nil
 	end
 
-	local achievementGiver = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
-
-	achievementGiver({
-		Title = "I don't want a Noise",
-		Desc = "CeaseStopping",
-		Reason = "Survive Cease",
-		Image = "rbxassetid://104367200417966"
-	})
+	if not hasGottenAchievement then
+				hasGottenAchievement = true
+				local achievementGiver = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
+				achievementGiver({
+					Title = "I Don't A Noise",
+					Desc = "CrouchSproof",
+					Reason = "Encounter And Survive Cease",
+					Image = "rbxassetid://104367200417966"
+				})
+			end
+		end
 end)
 
 entity:SetCallback("OnDespawned", function()

@@ -1,4 +1,4 @@
-Function GetGitSound(GithubSnd,SoundName)
+function GetGitSound(GithubSnd,SoundName)
 	local url=GithubSnd
 	if not isfile(SoundName..".mp3") then
 		writefile(SoundName..".mp3", game:HttpGet(url))

@@ -1,265 +1,314 @@
-function GetGitSound(GithubSnd,SoundName)
-	local url=GithubSnd
-	if not isfile(SoundName..".mp3") then
-		writefile(SoundName..".mp3", game:HttpGet(url))
-	end
-	local sound=Instance.new("Sound")
-	sound.SoundId=(getcustomasset or getsynasset)(SoundName..".mp3")
-	return sound
-end
-
-local Tweenservice = game:GetService("TweenService")
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Remotes = ReplicatedStorage:WaitForChild("RemotesFolder")
-
-local rng = Random.new()
-local raycastLoop = nil -- Khai báo toàn cục để OnDespawning có thể ngắt kết nối
-
-local function light(tim, color0, color1)
-	local info = TweenInfo.new(tim, Enum.EasingStyle.Linear)
-	local currentRooms = workspace:FindFirstChild("CurrentRooms")
-	if not currentRooms then return end
-
-	for _, instance in ipairs(currentRooms:GetDescendants()) do
-		if instance:IsA("Light") or instance:IsA("SurfaceLight") or instance:IsA("SpotLight") then
-			Tweenservice:Create(instance, info, {Color = color1}):Play()
-		elseif instance:IsA("MeshPart") and instance.Material == Enum.Material.Neon and instance.Name ~= "Skybox" then
-			Tweenservice:Create(instance, info, {Color = color0}):Play()
-		end
-	end
-end
-
---====== Load spawner ======---
+---====== Load spawner ======---
 
 local Spawner = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/DOORS-Entity-Spawner-V2/main/init.luau"))()
 
 ---====== Create entity ======---
 
 local entity = Spawner:Create({
-	Entity = {
-		Name = "CeaseMoving",
-		Asset = "rbxassetid://13197667688",
-		HeightOffset = 0
-	},
-	Lights = {
-		Flicker = {
-			Enabled = false,
-			Duration = 1
-		},
-		Shatter = false,
-		Repair = false
-	},
-	Earthquake = {
-		Enabled = false
-	},
-	CameraShake = {
-		Enabled = true,
-		Range = 100,
-		Values = {1.5, 20, 0.1, 1} -- Magnitude, Roughness, FadeIn, FadeOut
-	},
-	Movement = {
-		Speed = 60,
-		Delay = 0,
-		Reversed = false
-	},
-	Rebounding = {
-		Enabled = false,
-		Type = "Ambush", -- "Blitz"
-		Min = 1,
-		Max = 1,
-		Delay = 2
-	},
-	Damage = {
-		Enabled = false,
-		IgnoreHiding = false,
-		Range = 40,
-		Amount = 125
-	},
-	Crucifixion = {
-		Enabled = true,
-		Range = 40,
-		Resist = false,
-		Break = true
-	},
-	Death = {
-		Type = "Guiding", -- "Curious"
-		Hints = {"Death", "Hints", "Go", "Here"},
-		Cause = ""
-	}
+    Entity = {
+        Name = "Cease",
+        Asset = "https://github.com/junin724/Depth/raw/refs/heads/main/cesase%20storppin.rbxm",
+        HeightOffset = 0
+    },
+    Lights = {
+        Flicker = {
+            Enabled = false,
+            Duration = 1
+        },
+        Shatter = false,
+        Repair = false
+    },
+    Earthquake = {
+        Enabled = false
+    },
+    CameraShake = {
+        Enabled = true,
+        Range = 100,
+        Values = {1.5, 40, 0.1, 0.1} -- Magnitude, Roughness, FadeIn, FadeOut
+    },
+    Movement = {
+        Speed = 50,
+        Delay = 1,
+        Reversed = false
+    },
+    Rebounding = {
+        Enabled = false,
+        Type = "Ambush", -- "Blitz"
+        Min = 1,
+        Max = 1,
+        Delay = 2
+    },
+    Damage = {
+        Enabled = false, 
+        Range = 40,
+        Amount = 125
+    },
+    Crucifixion = {
+        Enabled = true,
+        Range = 40,
+        Resist = false,
+        Break = true
+    },
+    Death = {
+        Type = "Guiding", -- "Curious"
+        Hints = {"You just died to Cease...", "It sees through movement and can see anyone through a wardrobe.", "Maybe don't hide?", "I hope to see you here again."},
+        Cause = "Cease"
+    }
 })
 
----====== Debug entity ======---
+---====== Custom Logic Variables ======---
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    Humanoid = char:WaitForChild("Humanoid")
+end)
+
+local movementConnection = nil
+local lavenderColor = Color3.new(0.454902, 0.529412, 1)
+local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+-- CONFIGURABLE DETECTION FIELD
+local MAX_DETECTION_DISTANCE = 75 
+local VISION_ANGLE_THRESHOLD = 0.75 
+
+-- Function to smoothly fade light colors using TweenService
+local function changeLightColors()
+    local currentRoom = workspace:FindFirstChild("CurrentRooms")
+    if currentRoom then
+        for _, room in ipairs(currentRoom:GetChildren()) do
+            for _, desc in ipairs(room:GetDescendants()) do
+                if desc:IsA("Light") then
+                    TweenService:Create(desc, tweenInfo, {Color = lavenderColor}):Play()
+                elseif desc:IsA("BasePart") and (desc.Name == "Light" or desc.Name == "Neon" or desc.Name == "Bulb") then
+                    TweenService:Create(desc, tweenInfo, {Color = lavenderColor}):Play()
+                end
+            end
+        end
+    end
+end
+
+-- Integrated snippet logic: Checks direct WASD vector
+local function isPlayerMoving()
+    return Humanoid and Humanoid.Parent and Humanoid.MoveDirection.Magnitude > 0.1
+end
+
+-- Tắt collision và xóa bỏ hoàn toàn âm thanh Repent trong model
+local function setupModelCollisionListener(model)
+    if not model then return end
+    
+    for _, desc in ipairs(model:GetDescendants()) do
+        if desc:IsA("BasePart") then
+            desc.CanCollide = false
+            desc.CanTouch = false
+            desc.CanQuery = false
+        elseif desc:IsA("Sound") and desc.Name == "Repent" then
+            desc:Stop()
+            desc:Destroy()
+        end
+    end
+    
+    model.DescendantAdded:Connect(function(desc)
+        if desc:IsA("BasePart") then
+            desc.CanCollide = false
+            desc.CanTouch = false
+            desc.CanQuery = false
+        elseif desc:IsA("Sound") and desc.Name == "Repent" then
+            desc:Stop()
+            desc:Destroy()
+        end
+    end)
+end
+
+-- Dừng toàn bộ âm thanh thuộc về Cease khi despawn
+local function stopEntitySounds(model)
+    if not model then return end
+    for _, desc in ipairs(model:GetDescendants()) do
+        if desc:IsA("Sound") then
+            pcall(function()
+                desc:Stop()
+            end)
+        end
+    end
+end
+
+---====== Callback Setup ======---
 
 entity:SetCallback("OnSpawned", function()
-	print("Entity has spawned")
-
-	light(2, Color3.fromRGB(127, 249, 255), Color3.fromRGB(0, 45, 185))
-
-	-- Chờ cho đến khi Model của Cease xuất hiện
-	repeat task.wait() until entity.Model or workspace:FindFirstChild("CeaseMoving")
-	local ceaseModel = entity.Model or workspace:FindFirstChild("CeaseMoving")
-
-	local hitboxRange = 40
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Blacklist
-	params.FilterDescendantsInstances = {ceaseModel}
-
-	-- Vòng lặp kiểm tra di chuyển của người chơi
-	raycastLoop = RunService.Heartbeat:Connect(function()
-		if not ceaseModel or not ceaseModel.Parent then return end
-		local origin = ceaseModel:GetPivot().Position
-
-		for _, player in ipairs(Players:GetPlayers()) do
-			local chr = player.Character
-			if chr and chr:FindFirstChild("HumanoidRootPart") and chr:FindFirstChild("Humanoid") then
-				local hrp = chr.HumanoidRootPart
-				local humanoid = chr.Humanoid
-
-				local direction = (hrp.Position - origin).Unit
-				local rayResult = workspace:Raycast(origin, direction * hitboxRange, params)
-
-				if rayResult and rayResult.Instance and rayResult.Instance:IsDescendantOf(chr) then
-					local isMovingByInput = humanoid.MoveDirection.Magnitude > 0.1
-					local isMovingByVelocity = hrp.AssemblyLinearVelocity.Magnitude > 2
-
-					-- Xử lý khi người chơi di chuyển trong tầm nhìn
-					if isMovingByInput and isMovingByVelocity and humanoid.Health > 0 then
-						humanoid.Health = 0
-						
-						ceaseModel.HSUR.Kill:Play()
-
-						print(player.Name .. " bị Cease giết vì di chuyển!")
-
-						ReplicatedStorage.GameStats["Player_".. player.Name].Total.DeathCause.Value = "Cease"
-						firesignal(Remotes.DeathHint.OnClientEvent, "You died to who you call Cease"," Cease is capable of hearing you for miles so I recommend you to run away", "Blue")
-					end
-				end
-			end
-		end
-	end)
+    print("Entity has spawned")
+    changeLightColors()
+    
+    task.spawn(function()
+        local entityModel = workspace:WaitForChild("Cease", 5)
+        if entityModel then
+            setupModelCollisionListener(entityModel)
+        end
+    end)
 end)
 
 entity:SetCallback("OnStartMoving", function()
-	print("Entity has started moving")
+    print("Entity has started moving")
+    
+    local entityModel = workspace:FindFirstChild("Cease")
+    if not entityModel then return end
+    
+    setupModelCollisionListener(entityModel)
+    
+    if movementConnection then
+        movementConnection:Disconnect()
+        movementConnection = nil
+    end
+    
+    local originPart = entityModel.PrimaryPart or entityModel:FindFirstChildWhichIsA("BasePart")
+    local lastPosition = originPart and originPart.Position or Vector3.new()
+    
+    movementConnection = RunService.Heartbeat:Connect(function()
+        if not entityModel or not entityModel.Parent or not entityModel:IsDescendantOf(workspace) then
+            if movementConnection then
+                movementConnection:Disconnect()
+                movementConnection = nil
+            end
+            return
+        end
+        
+        if not Character or not Humanoid or Humanoid.Health <= 0 then return end
+        
+        local targetPart = Character:FindFirstChild("HumanoidRootPart")
+        originPart = entityModel.PrimaryPart or entityModel:FindFirstChildWhichIsA("BasePart")
+        
+        if originPart and targetPart then
+            local currentPosition = originPart.Position
+            local toPlayerVector = (targetPart.Position - currentPosition)
+            local distance = toPlayerVector.Magnitude
+            
+            -- Calculate head tracking heading direction based on frame displacement
+            local displacement = (currentPosition - lastPosition)
+            local entityMoveDirection = displacement.Magnitude > 0.01 and displacement.Unit or originPart.CFrame.LookVector
+            lastPosition = currentPosition 
+            
+            if distance <= MAX_DETECTION_DISTANCE then
+                local directionToPlayer = toPlayerVector.Unit
+                local dotProduct = directionToPlayer:Dot(entityMoveDirection)
+                
+                if dotProduct >= VISION_ANGLE_THRESHOLD or Character:GetAttribute("Hiding") then
+                    
+                    -- Modern Raycast Implementation
+                    local raycastParams = RaycastParams.new()
+                    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                    raycastParams.FilterDescendantsInstances = {entityModel, Character}
+                    
+                    local raycastResult = workspace:Raycast(currentPosition, toPlayerVector, raycastParams)
+                    
+                    if not raycastResult then
+                        if isPlayerMoving() then
+                            if movementConnection then
+                                movementConnection:Disconnect()
+                                movementConnection = nil
+                            end
+                            
+                            -- Update backend death cause metric dynamically
+                            pcall(function()
+                                local playerStats = ReplicatedStorage:FindFirstChild("GameStats")
+                                if playerStats then
+                                    local targetedFolder = playerStats:FindFirstChild("Player_" .. LocalPlayer.Name)
+                                    if targetedFolder and targetedFolder:FindFirstChild("Total") and targetedFolder.Total:FindFirstChild("DeathCause") then
+                                        targetedFolder.Total.DeathCause.Value = "Cease"
+                                    end
+                                end
+                            end)
+                            
+                            Humanoid.Health = 0
+                            pcall(function()
+                                Spawner:Kill()
+                            end)
+                        end
+                    end
+                end
+            end
+        end
+    end)
 end)
 
 entity:SetCallback("OnEnterRoom", function(room: Model, firstTime: boolean)
-	if not firstTime then
-		print("Entity has entered room: " .. room.Name .. " again")
-		return
-	end
+    changeLightColors()
+    
+    local entityModel = workspace:FindFirstChild("Cease")
+    if entityModel then 
+        setupModelCollisionListener(entityModel) 
+    end
 
-	local chance = rng:NextInteger(93, 100)
-	if chance == 100 then
-		task.wait(rng:NextNumber(0.5, 1))
+    -- ====== CEASE FREEZE EFFECT ======
+    task.spawn(function()
+        local originalStates = {}
+        local disabledInteractions = {}
+        local frostColor = Color3.fromRGB(155, 215, 255) -- Vivid ice blue
+        local meltTime = 10
+        local meltTweenInfo = TweenInfo.new(meltTime, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
 
-		local Roomec = room:FindFirstChild("RoomEntrance", true)
-		local entityModel = entity.Model or workspace:FindFirstChild("CeaseMoving")
-		local entityRoot = entityModel and (entityModel:FindFirstChild("HumanoidRootPart") or entityModel:FindFirstChildWhichIsA("BasePart"))
+        -- 1. Scan and instantly apply the frozen blue frost state
+        for _, desc in ipairs(room:GetDescendants()) do
+            if desc:IsA("BasePart") and desc.Name ~= "Light" and desc.Name ~= "Neon" and desc.Name ~= "Bulb" then
+                originalStates[desc] = {
+                    Color = desc.Color,
+                    Material = desc.Material
+                }
+                desc.Color = frostColor
+                desc.Material = Enum.Material.Ice -- Creates the white frost overlay look
+            elseif desc:IsA("ProximityPrompt") or desc:IsA("ClickDetector") then
+                if desc.Enabled == true then
+                    disabledInteractions[desc] = true
+                    desc.Enabled = false
+                end
+            end
+        end
 
-		if entityModel then
-			local move = GetGitSound("https://github.com/eoyoustme/Custom-Entity/blob/main/TAILOC.mp3?raw=true","tailocdeolon")
-			move.Parent = workspace
-			move.Name = "tailoc"
-			move.Volume = 3
-			move:Play()
-			move.Ended:Connect(function() move:Destroy() end)
-		end
+        -- 2. Smoothly fade the color back to normal over 10 seconds
+        for part, original in pairs(originalStates) do
+            if part and part.Parent then
+                TweenService:Create(part, meltTweenInfo, {Color = original.Color}):Play()
+            end
+        end
 
-		if entityModel and entityModel.Parent and entityRoot then
-			local doorFreezePos = entityRoot.CFrame
-			local freezeConnection
+        -- 3. Wait out the timer, clear the frost material, and unfreeze interactions
+        task.wait(meltTime)
+        
+        for part, original in pairs(originalStates) do
+            if part and part.Parent then
+                part.Material = original.Material
+            end
+        end
 
-			freezeConnection = RunService.Heartbeat:Connect(function()
-				if entityModel and entityModel.Parent and entityRoot then
-					entityRoot.Anchored = true
-					entityRoot.CFrame = doorFreezePos
-					entityRoot.AssemblyLinearVelocity = Vector3.zero
-					entityRoot.AssemblyAngularVelocity = Vector3.zero
-				end
-			end)
-
-			task.wait(3)
-
-			if freezeConnection then
-				freezeConnection:Disconnect()
-				freezeConnection = nil
-			end
-
-			entityRoot.Anchored = true
-
-			local tweenDown = Tweenservice:Create(
-				entityRoot,
-				TweenInfo.new(0.75, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
-				{ CFrame = Roomec.CFrame * CFrame.new(0, -1, 0) }
-			)
-
-			tweenDown:Play()
-			tweenDown.Completed:Wait()
-		end
-	end
-end)
-
-
-entity:SetCallback("OnLookAt", function(lineOfSight: boolean)
-	if lineOfSight == true then
-		print("Player is looking at entity")
-	else
-		print("")
-	end
-end)
-
-entity:SetCallback("OnRebounding", function(startOfRebound: boolean)
-	if startOfRebound == true then
-		print("Entity has started rebounding")
-	else
-		print("Entity has finished rebounding")
-	end
+        for interaction, _ in pairs(disabledInteractions) do
+            if interaction and interaction.Parent then
+                interaction.Enabled = true
+            end
+        end
+    end)
 end)
 
 entity:SetCallback("OnDespawning", function()
-	print("Entity is despawning")
-	if raycastLoop then
-		raycastLoop:Disconnect()
-		raycastLoop = nil
-	end
-
-	-- KIỂM TRA ĐÃ LẤY THÀNH TỰU CHƯA (Tránh nhận lại nhiều lần)
-	local player = Players.LocalPlayer
-	if player and not player:FindFirstChild("CeaseAchievementUnlocked") then
-		
-		-- Đánh dấu người chơi đã nhận thành tựu thành công
-		local flag = Instance.new("BoolValue")
-		flag.Name = "CeaseAchievementUnlocked"
-		flag.Value = true
-		flag.Parent = player
-
-		-- Nhận thành tựu
-		pcall(function()
-			local achievementGiver = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
-
-			achievementGiver({
-				Title = "I don't want a Noise",
-				Desc = "CeaseStopping",
-				Reason = "Survive Cease",
-				Image = "rbxassetid://104367200417966"
-			})
-		end)
-	end
+      -- MỞ CỬA BẰNG LATESTROOM
+    local latestRoom = workspace.CurrentRooms:FindFirstChild(tostring(game.ReplicatedStorage.GameData.LatestRoom.Value))
+    if latestRoom and latestRoom:FindFirstChild("Door") and latestRoom.Door:FindFirstChild("ClientOpen") then
+        latestRoom.Door.ClientOpen:FireServer()
+    end
 end)
 
 entity:SetCallback("OnDespawned", function()
-	print("Entity has despawned")
-end)
-
-entity:SetCallback("OnDamagePlayer", function(newHealth: number)
-	if newHealth <= 0 then
-		print("Entity has killed the player")
-	else
-		print("Entity has damaged the player")
-	end
+    if movementConnection then 
+        movementConnection:Disconnect()
+        movementConnection = nil
+    end
+    
+    local entityModel = workspace:FindFirstChild("Cease")
+    stopEntitySounds(entityModel)
 end)
 
 ---====== Run entity ======---

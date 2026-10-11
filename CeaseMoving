@@ -224,11 +224,9 @@ entity:SetCallback("OnStartMoving", function()
                             -- Update backend death cause metric dynamically
                             pcall(function()
                                 local playerStats = ReplicatedStorage:FindFirstChild("GameStats")
-                                if playerStats then
-                                    local targetedFolder = playerStats:FindFirstChild("Player_" .. LocalPlayer.Name)
-                                    if targetedFolder and targetedFolder:FindFirstChild("Total") and targetedFolder.Total:FindFirstChild("DeathCause") then
-                                        targetedFolder.Total.DeathCause.Value = "Cease"
-                                    end
+                                local targetedFolder = playerStats and playerStats:FindFirstChild("Player_" .. LocalPlayer.Name)
+                                if targetedFolder and targetedFolder:FindFirstChild("Total") and targetedFolder.Total:FindFirstChild("DeathCause") then
+                                    targetedFolder.Total.DeathCause.Value = "Cease"
                                 end
                             end)
                             
@@ -252,15 +250,15 @@ entity:SetCallback("OnEnterRoom", function(room: Model, firstTime: boolean)
         setupModelCollisionListener(entityModel) 
     end
 
-    -- ====== CEASE FREEZE EFFECT ======
+    -- ====== CEASE FREEZE EFFECT (FULL TOÀN BỘ PART TRONG PHÒNG) ======
     task.spawn(function()
         local originalStates = {}
         local disabledInteractions = {}
-        local frostColor = Color3.fromRGB(155, 215, 255) -- Vivid ice blue
+        local frostColor = Color3.fromRGB(155, 215, 255)
         local meltTime = 10
         local meltTweenInfo = TweenInfo.new(meltTime, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
 
-        -- 1. Scan and instantly apply the frozen blue frost state
+        -- Quét toàn bộ part không chừa món nào
         for _, desc in ipairs(room:GetDescendants()) do
             if desc:IsA("BasePart") and desc.Name ~= "Light" and desc.Name ~= "Neon" and desc.Name ~= "Bulb" then
                 originalStates[desc] = {
@@ -268,7 +266,7 @@ entity:SetCallback("OnEnterRoom", function(room: Model, firstTime: boolean)
                     Material = desc.Material
                 }
                 desc.Color = frostColor
-                desc.Material = Enum.Material.Ice -- Creates the white frost overlay look
+                desc.Material = Enum.Material.Ice
             elseif desc:IsA("ProximityPrompt") or desc:IsA("ClickDetector") then
                 if desc.Enabled == true then
                     disabledInteractions[desc] = true
@@ -277,14 +275,13 @@ entity:SetCallback("OnEnterRoom", function(room: Model, firstTime: boolean)
             end
         end
 
-        -- 2. Smoothly fade the color back to normal over 10 seconds
+        -- Tan chảy trả màu gốc
         for part, original in pairs(originalStates) do
             if part and part.Parent then
                 TweenService:Create(part, meltTweenInfo, {Color = original.Color}):Play()
             end
         end
 
-        -- 3. Wait out the timer, clear the frost material, and unfreeze interactions
         task.wait(meltTime)
         
         for part, original in pairs(originalStates) do
@@ -301,14 +298,6 @@ entity:SetCallback("OnEnterRoom", function(room: Model, firstTime: boolean)
     end)
 end)
 
-entity:SetCallback("OnDespawning", function()
-      -- MỞ CỬA BẰNG LATESTROOM
-    local latestRoom = workspace.CurrentRooms:FindFirstChild(tostring(game.ReplicatedStorage.GameData.LatestRoom.Value))
-    if latestRoom and latestRoom:FindFirstChild("Door") and latestRoom.Door:FindFirstChild("ClientOpen") then
-        latestRoom.Door.ClientOpen:FireServer()
-    end
-end)
-
 entity:SetCallback("OnDespawned", function()
     if movementConnection then 
         movementConnection:Disconnect()
@@ -317,6 +306,25 @@ entity:SetCallback("OnDespawned", function()
     
     local entityModel = workspace:FindFirstChild("Cease")
     stopEntitySounds(entityModel)
+
+    -- MỞ CỬA AN TOÀN KHI THỰC THỂ DESPAWN
+    pcall(function()
+        local currentRooms = workspace:FindFirstChild("CurrentRooms")
+        local latestRoomVal = ReplicatedStorage:WaitForChild("GameData"):WaitForChild("LatestRoom").Value
+        if currentRooms then
+            local latestRoom = currentRooms:FindFirstChild(tostring(latestRoomVal))
+            if latestRoom and latestRoom:FindFirstChild("Door") then
+                local clientOpen = latestRoom.Door:FindFirstChild("ClientOpen")
+                if clientOpen then
+                    if clientOpen:IsA("RemoteEvent") then
+                        clientOpen:FireServer()
+                    elseif clientOpen:IsA("RemoteFunction") then
+                        clientOpen:InvokeServer()
+                    end
+                end
+            end
+        end
+    end)
 end)
 
 ---====== Run entity ======---

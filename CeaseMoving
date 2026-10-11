@@ -7,7 +7,7 @@ local Spawner = loadstring(game:HttpGet("https://raw.githubusercontent.com/Regul
 local entity = Spawner:Create({
     Entity = {
         Name = "Cease",
-        Asset = "https://github.com/junin724/Depth/raw/refs/heads/main/cesase%20storppin.rbxm",
+        Asset = "rbxassetid://12262854624",
         HeightOffset = 0
     },
     Lights = {
@@ -143,6 +143,14 @@ end
 
 entity:SetCallback("OnSpawned", function()
     print("Entity has spawned")
+
+local active = Instance.new("Sound")
+active.Parent = workspace
+active.Name = "spawn"
+active.SoundId = "rbxassetid://166047422"
+active.Volume = 3
+active:Play()
+
     changeLightColors()
     
     task.spawn(function()
